@@ -1,7 +1,7 @@
 var m = require('mraa');
 var util = require('util');
 
-var BUS_ADDRESS = 6;
+var ADDRESS = 0x40;
 
 var TH02_REG_STATUS = 0x00;
 var TH02_REG_DATA_H = 0x01;
@@ -16,8 +16,9 @@ var TH02_CMD_MEASURE_TEMP = 0x11;
 
 var SUCCESS = 0;
 
-var TH02 = function(address) {
-    this._address = address;
+var TH02 = function(bus) {
+    this._address = ADDRESS;
+    this._bus = bus;
     this.reset();
 };
 
@@ -39,18 +40,36 @@ TH02.prototype.getRawTemperature = function () {
     return parseFloat(temperature);
 };
 
-TH02.prototype.getCelsius = function () {
+TH02.prototype.getHumidity = function () {
+    var humidity = 0;
+    if (this.x.writeReg(TH02_REG_CONFIG, TH02_CMD_MEASURE_HUMI)) {
+        console.log('Write failed');
+        return 0.0;
+    }
+    
+     /* Wait until conversion is done */
+    while (this.getStatus() === false);
+    
+    humidity = this.x.readReg(TH02_REG_DATA_H); 
+    humidity = humidity << 8;
+    humidity |= this.x.readReg(TH02_REG_DATA_L);
+    humidity >>= 4;
+    
+    return (parseFloat(humidity)/16.0)-24.0;;
+};
+
+TH02.prototype.getCelsiusTemp = function () {
     var temp = this.getRawTemperature();
     return ((parseFloat(temp) / 32.0) - 50.0);
 }
 
-TH02.prototype.getFarenheit = function () {
+TH02.prototype.getFarenheitTemp = function () {
     var temp = this.getRawTemperature();
     return (((parseFloat(temp) / 32.0) - 50.0) * (9/5) + 32);
 }
 
 TH02.prototype.reset = function () {
-    this.x = new m.I2c(BUS_ADDRESS);
+    this.x = new m.I2c(this._bus);
     var res = this.x.address(this._address);
     if(res != SUCCESS)
         throw new Error('Unexpected response from TH02');
